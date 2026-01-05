@@ -34,27 +34,7 @@ u8 lfsr7NoiseSample[] ALIGN(4) = {
 // If the arm7 binary hits its size limit, this may need to be reworked.
 #include "noise.h"
 
-
-// Callback for hyperSound / Sound Fix, which works with arm9 to synchronize 
-// sound to the cycle.
-void timerCallback() {
-    sharedData->dsCycles+=SOUND_RESOLUTION;
-    if (sharedData->cycles != -1) {
-        bool doit=false;
-        if (sharedData->frameFlip_Gameboy == sharedData->frameFlip_DS) {
-            if (sharedData->dsCycles >= sharedData->cycles)
-                doit = true;
-        }
-        else {
-            doit = true;
-        }
-        if (doit) {
-            sharedData->cycles = -1;
-            doCommand(sharedData->message);
-        }
-    }
-}
-
+void timerCallback();
 
 void setChannelVolume(int c, bool write) {
     int channel = channels[c];
@@ -73,6 +53,9 @@ void setChannelVolume(int c, bool write) {
         SCHANNEL_CR(channel) |= volume;
     }
 }
+
+void startChannel(int c);
+
 void updateChannel(int c, bool write) {
     int channel = channels[c];
 
@@ -260,4 +243,25 @@ void installGameboySoundFIFO() {
     SCHANNEL_LENGTH(1) = 16>>2;
     SCHANNEL_CR(1) = SCHANNEL_ENABLE | SOUND_VOL(0) | 
         SOUND_PAN(64) | (0 << 29) | SOUND_REPEAT;
+}
+
+
+// Callback for hyperSound / Sound Fix, which works with arm9 to synchronize 
+// sound to the cycle.
+void timerCallback() {
+    sharedData->dsCycles+=SOUND_RESOLUTION;
+    if (sharedData->cycles != -1) {
+        bool doit=false;
+        if (sharedData->frameFlip_Gameboy == sharedData->frameFlip_DS) {
+            if (sharedData->dsCycles >= sharedData->cycles)
+                doit = true;
+        }
+        else {
+            doit = true;
+        }
+        if (doit) {
+            sharedData->cycles = -1;
+            doCommand(sharedData->message);
+        }
+    }
 }

@@ -60,7 +60,7 @@ void selectRom() {
     unloadRom();
 
     loadFileChooserState(&romChooserState);
-    const char* extraExtensions[] = {"gbs"};
+    const char* extraExtensions[] = {""};
     char* filename = startFileChooser(extraExtensions, true);
     saveFileChooserState(&romChooserState);
 
@@ -221,8 +221,8 @@ int main(int argc, char* argv[])
     initInput();
     setMenuDefaults();
     readConfigFile();
-    swiWaitForVBlank();
-    swiWaitForVBlank();
+    cothread_yield_irq(IRQ_VBLANK);
+    cothread_yield_irq(IRQ_VBLANK);
     // initGFX is called in initializeGameboy, but I also call it from here to
     // set up the vblank handler asap.
     initGFX();

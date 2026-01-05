@@ -193,7 +193,7 @@ void gameboyUpdateVBlank() {
     if (gameboyPaused) {
         muteSND();
         while (gameboyPaused) {
-            swiWaitForVBlank();
+            cothread_yield_irq(IRQ_VBLANK);
             readKeys();
             updateMenu();
         }
@@ -237,13 +237,13 @@ void gameboyUpdateVBlank() {
         int line=0;
         if (fpsOutput) {
             consoleClear();
-            iprintf("FPS: %d\n", fps);
+            printf("FPS: %d\n", fps);
             line++;
         }
         fps = 0;
         if (timeOutput) {
             for (; line<23-1; line++)
-                iprintf("\n");
+                printf("\n");
             char *timeString = ctime(&rawTime);
             for (int i=0;; i++) {
                 if (timeString[i] == ':') {
@@ -256,8 +256,8 @@ void gameboyUpdateVBlank() {
             s[5] = '\0';
             int spaces = 31-strlen(s);
             for (int i=0; i<spaces; i++)
-                iprintf(" ");
-            iprintf("%s\n", s);
+                printf(" ");
+            printf("%s\n", s);
         }
         lastRawTime = rawTime;
     }
@@ -283,6 +283,7 @@ bool isGameboyPaused() {
     return gameboyPaused;
 }
 
+bool transferReady;
 int soundCycles=0;
 int extraCycles;
 void runEmul()
@@ -305,6 +306,8 @@ void runEmul()
         extraCycles=0;
 
         cyclesSinceVblank += cycles;
+        if (nifiEnabled)
+            updateNifi(cycles>>doubleSpeed);
 
         if (serialCounter > 0) {
             serialCounter -= cycles;
@@ -317,21 +320,16 @@ void runEmul()
                 setEventCycles(serialCounter);
         }
         if (transferReady) {
-            if (nifiEnabled) {
-                if (!(ioRam[0x02] & 1)) {
-                    sendPacketByte(56, linkSendData);
-                    timerStop(2);
-                }
-            }
-            else if (printerEnabled) {
+            if (nifiEnabled)
+                sendPacketByte(ioRam[0x01]);
+            else if (printerEnabled)
                 sendGbPrinterByte(ioRam[0x01]);
-            }
             else
                 linkReceivedData = 0xff;
             ioRam[0x01] = linkReceivedData;
             requestInterrupt(SERIAL);
             ioRam[0x02] &= ~0x80;
-            linkReceivedData = -1;
+            linkReceivedData = 0xff;
             transferReady = false;
         }
 

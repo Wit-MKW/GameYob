@@ -1,137 +1,186 @@
-# This is based off of the default arm7 code.
+# SPDX-License-Identifier: CC0-1.0
+#
+# SPDX-FileContributor: Antonio Niño Díaz, 2023
 
-export ARM7_MAJOR	:= 0
-export ARM7_MINOR	:= 5
-export ARM7_PATCH	:= 24
+export BLOCKSDS			?= /opt/blocksds/core
+export BLOCKSDSEXT		?= /opt/blocksds/external
 
-VERSTRING	:=	$(ARM7_MAJOR).$(ARM7_MINOR).$(ARM7_PATCH)
-#---------------------------------------------------------------------------------
-.SUFFIXES:
-#---------------------------------------------------------------------------------
-ifeq ($(strip $(DEVKITARM)),)
-$(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM")
-endif
+export WONDERFUL_TOOLCHAIN	?= /opt/wonderful
+ARM_NONE_EABI_PATH	?= $(WONDERFUL_TOOLCHAIN)/toolchain/gcc-arm-none-eabi/bin/
 
-include $(DEVKITARM)/ds_rules
-#---------------------------------------------------------------------------------
-# TARGET is the name of the output
-# BUILD is the directory where object files & intermediate files will be placed
-# SOURCES is a list of directories containing source code
-# INCLUDES is a list of directories containing extra header files
-#---------------------------------------------------------------------------------
-TARGET		:=	gameyob
-BUILD		:=	build
-SOURCES		:=	source
-INCLUDES	:=	include ../include build
+# Source code paths
+# -----------------
 
-#---------------------------------------------------------------------------------
-# options for code generation
-#---------------------------------------------------------------------------------
-ARCH	:=	-march=armv4t -mthumb -mthumb-interwork
+SOURCEDIRS	:= source
+INCLUDEDIRS	:= include ../include build
+BINDIRS		:=
 
-CFLAGS	:=	-g -Wall -Wno-psabi -O2\
- 		-mcpu=arm7tdmi -mtune=arm7tdmi -fomit-frame-pointer\
-		-ffast-math \
-		$(ARCH)
+# Defines passed to all files
+# ---------------------------
 
-CFLAGS	+=	$(INCLUDE) -DARM7
+DEFINES		:=
 
-ASFLAGS	:=	-g $(ARCH)
-LDFLAGS	=	-specs=ds_arm7.specs -g $(ARCH) -Wl,-Map,$(notdir $*).map
+# Libraries
+# ---------
 
+LIBS		:= -lnds7 -ldswifi7 -lmm7
+LIBDIRS		:= $(BLOCKSDS)/libs/libnds \
+		   $(BLOCKSDS)/libs/dswifi \
+		   $(BLOCKSDS)/libs/maxmod
 
-#---------------------------------------------------------------------------------
-# any extra libraries we wish to link with the project
-#---------------------------------------------------------------------------------
-LIBS	:= -lnds7 -ldsnifi7
+# Build artifacts
+# -----------------
 
+NAME		:= gameyob
+BUILDDIR	:= build
+ELF		:= build/$(NAME).elf
+DUMP		:= build/$(NAME).dump
+MAP		:= build/$(NAME).map
 
-#---------------------------------------------------------------------------------
-# list of directories containing libraries, this must be the top level containing
-# include and lib
-#---------------------------------------------------------------------------------
-LIBDIRS	:=	$(LIBNDS) ../
+# Tools
+# -----
 
+PREFIX		:= $(ARM_NONE_EABI_PATH)arm-none-eabi-
+CC		:= $(PREFIX)gcc
+CXX		:= $(PREFIX)g++
+LD		:= $(PREFIX)gcc
+OBJDUMP		:= $(PREFIX)objdump
+MKDIR		:= mkdir
+RM		:= rm -rf
 
-#---------------------------------------------------------------------------------
-# no real need to edit anything past this point unless you need to add additional
-# rules for different file extensions
-#---------------------------------------------------------------------------------
-ifneq ($(BUILD),$(notdir $(CURDIR)))
-#---------------------------------------------------------------------------------
+# Verbose flag
+# ------------
 
-export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir))
-
-CFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
-CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
-SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
-
-export OFILES	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
-
-export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
-			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
-			-I$(CURDIR)/$(BUILD)
-
-export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
-
-export DEPSDIR	:=	$(CURDIR)/build
-
-export OUTPUT	:=	$(CURDIR)/$(TARGET)
-
-#---------------------------------------------------------------------------------
-# use CXX for linking C++ projects, CC for standard C
-#---------------------------------------------------------------------------------
-ifeq ($(strip $(CPPFILES)),)
-#---------------------------------------------------------------------------------
-	export LD	:=	$(CC)
-#---------------------------------------------------------------------------------
+ifeq ($(VERBOSE),1)
+V		:=
 else
-#---------------------------------------------------------------------------------
-	export LD	:=	$(CXX)
-#---------------------------------------------------------------------------------
+V		:= @
 endif
-#---------------------------------------------------------------------------------
 
-.PHONY: all $(BUILD) clean
+# Source files
+# ------------
 
-all : $(BUILD)
+ifneq ($(BINDIRS),)
+    SOURCES_BIN	:= $(shell find -L $(BINDIRS) -name "*.bin")
+    INCLUDEDIRS	+= $(addprefix $(BUILDDIR)/,$(BINDIRS))
+endif
 
-#---------------------------------------------------------------------------------
-$(BUILD):
-	@[ -d $@ ] || mkdir -p $@
-	@$(MAKE) -C $(BUILD) -f $(CURDIR)/Makefile
+SOURCES_S	:= $(shell find -L $(SOURCEDIRS) -name "*.s")
+SOURCES_C	:= $(shell find -L $(SOURCEDIRS) -name "*.c")
+SOURCES_CPP	:= $(shell find -L $(SOURCEDIRS) -name "*.cpp")
 
+# Compiler and linker flags
+# -------------------------
 
-#---------------------------------------------------------------------------------
-dist: all
-#---------------------------------------------------------------------------------
-	@tar --exclude=*CVS* --exclude=.svn -cvjf default_arm7-src-$(VERSTRING).tar.bz2 source Makefile
-	@tar -cvjf default_arm7-$(VERSTRING).tar.bz2 default.elf
+ARCH		:= -mthumb -mcpu=arm7tdmi
 
-#---------------------------------------------------------------------------------
-install: all
-#---------------------------------------------------------------------------------
-	cp $(TARGET).elf $(LIBNDS)
+SPECS		:= $(BLOCKSDS)/sys/crts/ds_arm7.specs
 
-#---------------------------------------------------------------------------------
+WARNFLAGS	:= -Wall
+
+ifeq ($(SOURCES_CPP),)
+	LIBS	+= -lc
+else
+	LIBS	+= -lstdc++ -lc
+endif
+
+INCLUDEFLAGS	:= $(foreach path,$(INCLUDEDIRS),-I$(path)) \
+		   $(foreach path,$(LIBDIRS),-I$(path)/include)
+
+LIBDIRSFLAGS	:= $(foreach path,$(LIBDIRS),-L$(path)/lib)
+
+ASFLAGS		+= -x assembler-with-cpp $(DEFINES) $(INCLUDEFLAGS) \
+		   $(ARCH) -ffunction-sections -fdata-sections \
+		   -specs=$(SPECS)
+
+CFLAGS		+= $(WARNFLAGS) $(DEFINES) $(INCLUDEFLAGS) \
+		   $(ARCH) -O2 -ffunction-sections -fdata-sections \
+		   -specs=$(SPECS)
+
+CXXFLAGS	+= $(WARNFLAGS) $(DEFINES) $(INCLUDEFLAGS) \
+		   $(ARCH) -O2 -ffunction-sections -fdata-sections \
+		   -fno-exceptions -fno-rtti \
+		   -specs=$(SPECS)
+
+LDFLAGS		+= $(ARCH) $(LIBDIRSFLAGS) -Wl,-Map,$(MAP) $(DEFINES) \
+		   -Wl,--start-group $(LIBS) -Wl,--end-group -specs=$(SPECS)
+
+# Intermediate build files
+# ------------------------
+
+OBJS_ASSETS	:= $(addsuffix .o,$(addprefix $(BUILDDIR)/,$(SOURCES_BIN)))
+
+HEADERS_ASSETS	:= $(patsubst %.bin,%_bin.h,$(addprefix $(BUILDDIR)/,$(SOURCES_BIN)))
+
+OBJS_SOURCES	:= $(addsuffix .o,$(addprefix $(BUILDDIR)/,$(SOURCES_S))) \
+		   $(addsuffix .o,$(addprefix $(BUILDDIR)/,$(SOURCES_C))) \
+		   $(addsuffix .o,$(addprefix $(BUILDDIR)/,$(SOURCES_CPP)))
+
+OBJS		:= $(OBJS_ASSETS) $(OBJS_SOURCES)
+
+DEPS		:= $(OBJS:.o=.d)
+
+# Targets
+# -------
+
+.PHONY: all clean dump
+
+all: $(ELF)
+
+$(ELF): $(OBJS)
+	@echo "  LD.7    $@"
+	$(V)$(LD) -o $@ $(OBJS) $(LDFLAGS)
+
+$(DUMP): $(ELF)
+	@echo "  OBJDUMP.7 $@"
+	$(V)$(OBJDUMP) -h -C -S $< > $@
+
+dump: $(DUMP)
+
 clean:
-	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).elf  $(TARGET).arm7
+	@echo "  CLEAN.7"
+	$(V)$(RM) $(ELF) $(DUMP) $(MAP) $(BUILDDIR)
 
+# Rules
+# -----
 
-#---------------------------------------------------------------------------------
-else
+$(BUILDDIR)/%.s.o : %.s
+	@echo "  AS.7    $<"
+	@$(MKDIR) -p $(@D)
+	$(V)$(CC) $(ASFLAGS) -MMD -MP -c -o $@ $<
 
-DEPENDS	:=	$(OFILES:.o=.d)
+$(BUILDDIR)/%.c.o : %.c
+	@echo "  CC.7    $<"
+	@$(MKDIR) -p $(@D)
+	$(V)$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
-#---------------------------------------------------------------------------------
-# main targets
-#---------------------------------------------------------------------------------
+$(BUILDDIR)/%.arm.c.o : %.arm.c
+	@echo "  CC.7    $<"
+	@$(MKDIR) -p $(@D)
+	$(V)$(CC) $(CFLAGS) -MMD -MP -marm -mlong-calls -c -o $@ $<
 
-$(OUTPUT).elf	:	$(OFILES) $(LIBNDS)/lib/libnds7.a
- 
--include $(DEPENDS)
+$(BUILDDIR)/%.cpp.o : %.cpp
+	@echo "  CXX.7   $<"
+	@$(MKDIR) -p $(@D)
+	$(V)$(CXX) $(CXXFLAGS) -MMD -MP -c -o $@ $<
 
-#---------------------------------------------------------------------------------------
-endif
-#---------------------------------------------------------------------------------------
+$(BUILDDIR)/%.arm.cpp.o : %.arm.cpp
+	@echo "  CXX.7   $<"
+	@$(MKDIR) -p $(@D)
+	$(V)$(CXX) $(CXXFLAGS) -MMD -MP -marm -mlong-calls -c -o $@ $<
+
+$(BUILDDIR)/%.bin.o $(BUILDDIR)/%_bin.h : %.bin
+	@echo "  BIN2C.7 $<"
+	@$(MKDIR) -p $(@D)
+	$(V)$(BLOCKSDS)/tools/bin2c/bin2c $< $(@D)
+	$(V)$(CC) $(CFLAGS) -MMD -MP -c -o $(BUILDDIR)/$*.bin.o $(BUILDDIR)/$*_bin.c
+
+# All assets must be built before the source code
+# -----------------------------------------------
+
+$(SOURCES_S) $(SOURCES_C) $(SOURCES_CPP): $(HEADERS_ASSETS)
+
+# Include dependency files if they exist
+# --------------------------------------
+
+-include $(DEPS)

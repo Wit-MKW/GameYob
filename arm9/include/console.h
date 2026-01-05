@@ -11,6 +11,7 @@ extern int sgbModeOption;
 extern bool customBordersEnabled;
 extern bool sgbBordersEnabled;
 extern bool autoSavingEnabled;
+extern bool nifiEnabled;
 extern bool printerEnabled;
 extern int stateNum;
 extern int singleScreenMode;
@@ -50,7 +51,7 @@ PrintConsole* getPrintConsole();
 
 void consoleSetPosColor(int x, int y, int color);
 void consoleSetLineColor(int line, int color);
-void iprintfColored(int palette, const char* format, ...);
+void printfColored(int palette, const char* format, ...);
 void printLog(const char* format, ...);
 
 int checkRumble();

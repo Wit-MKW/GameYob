@@ -217,11 +217,11 @@ char* startFileChooser(const char* extensions[], bool romExtensions, bool canQui
     getcwd(cwd, 256);
     DIR* dp = opendir(cwd);
     struct dirent *entry;
-    if (dp == NULL) {
-        iprintf("Error opening directory.\n");
-        return 0;
-    }
     while (true) {
+        if (dp == NULL) {
+            printf("Error opening directory.\n");
+            return 0;
+        }
         numFiles=0;
         std::vector<char*> filenames;
         std::vector<int> flags;
@@ -232,7 +232,7 @@ char* startFileChooser(const char* extensions[], bool romExtensions, bool canQui
             char* ext = strrchr(entry->d_name, '.')+1;
             bool isValidExtension = false;
             bool isRomFile = false;
-            if (!(entry->d_type & DT_DIR)) {
+            if (!(entry->d_type == DT_DIR)) {
                 for (int i=0; i<numExtensions; i++) {
                     if (strcasecmp(ext, extensions[i]) == 0) {
                         isValidExtension = true;
@@ -246,10 +246,10 @@ char* startFileChooser(const char* extensions[], bool romExtensions, bool canQui
                 }
             }
 
-            if (entry->d_type & DT_DIR || isValidExtension) {
+            if (entry->d_type == DT_DIR || isValidExtension) {
                 if (!(strcmp(".", entry->d_name) == 0)) {
                     int flag = 0;
-                    if (entry->d_type & DT_DIR)
+                    if (entry->d_type == DT_DIR)
                         flag |= FLAG_DIRECTORY;
                     if (isRomFile)
                         flag |= FLAG_ROM;
@@ -276,7 +276,7 @@ char* startFileChooser(const char* extensions[], bool romExtensions, bool canQui
                     numFiles++;
                 }
             }
-            else if (strcasecmp(ext, "yss") == 0 && !(entry->d_type & DT_DIR)) {
+            else if (strcasecmp(ext, "yss") == 0 && !(entry->d_type == DT_DIR)) {
                 bool matched = false;
                 char buffer2[256];
                 strcpy(buffer2, entry->d_name);
@@ -323,13 +323,13 @@ char* startFileChooser(const char* extensions[], bool romExtensions, bool canQui
             consoleClear();
             for (int i=scrollY; i<scrollY+filesPerPage && i<numFiles; i++) {
                 if (i == fileSelection)
-                    iprintf("* ");
+                    printf("* ");
                 else if (i == scrollY && i != 0)
-                    iprintf("^ ");
+                    printf("^ ");
                 else if (i == scrollY+filesPerPage-1 && scrollY+filesPerPage-1 != numFiles-1)
-                    iprintf("v ");
+                    printf("v ");
                 else
-                    iprintf("  ");
+                    printf("  ");
 
                 int maxLen = 30;
                 if (flags[i] & FLAG_DIRECTORY)
@@ -337,13 +337,13 @@ char* startFileChooser(const char* extensions[], bool romExtensions, bool canQui
                 strncpy(buffer, filenames[i], maxLen);
                 buffer[maxLen] = '\0';
                 if (flags[i] & FLAG_DIRECTORY)
-                    iprintfColored(CONSOLE_COLOR_LIGHT_YELLOW, "%s/", buffer);
+                    printfColored(CONSOLE_COLOR_LIGHT_YELLOW, "%s/", buffer);
                 else if (flags[i] & FLAG_SUSPENDED)
-                    iprintfColored(CONSOLE_COLOR_LIGHT_MAGENTA, "%s", buffer);
+                    printfColored(CONSOLE_COLOR_LIGHT_MAGENTA, "%s", buffer);
                 else
-                    iprintfColored(CONSOLE_COLOR_WHITE, "%s", buffer);
+                    printfColored(CONSOLE_COLOR_WHITE, "%s", buffer);
                 for (uint j=0; j<maxLen-strlen(buffer); j++)
-                    iprintfColored(CONSOLE_COLOR_WHITE, " ");
+                    printfColored(CONSOLE_COLOR_WHITE, " ");
 
                 if (i == fileSelection) {
                     consoleSelectedRow = i-scrollY; // triggers blue highlighting
@@ -352,14 +352,14 @@ char* startFileChooser(const char* extensions[], bool romExtensions, bool canQui
             if (canQuit) {
                 if (numFiles < filesPerPage) {
                     for (int i=numFiles; i<filesPerPage; i++)
-                        iprintfColored(CONSOLE_COLOR_WHITE, "\n");
+                        printfColored(CONSOLE_COLOR_WHITE, "\n");
                 }
-                iprintfColored(CONSOLE_COLOR_WHITE, "                Press Y to exit");
+                printfColored(CONSOLE_COLOR_WHITE, "                Press Y to exit");
             }
 
             // Wait for input
             while (true) {
-                swiWaitForVBlank();
+                cothread_yield_irq(IRQ_VBLANK);
                 readKeys();
                 if (keyJustPressed(KEY_A)) {
                     if (flags[fileSelection] & FLAG_DIRECTORY) {
@@ -389,8 +389,8 @@ char* startFileChooser(const char* extensions[], bool romExtensions, bool canQui
 lowerDirectory:
                         // Select this directory when going up
                         getcwd(cwd, 256);
-                        *(strrchr(cwd, '/')) = '\0';
                         matchFile = string(strrchr(cwd, '/')+1);
+                        *(strrchr(cwd, '/')) = '\0';
 
                         closedir(dp);
                         dp = opendir("..");

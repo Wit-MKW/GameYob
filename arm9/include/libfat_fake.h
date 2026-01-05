@@ -1,4 +1,4 @@
-#pragma once
+/*#pragma once
 
 #include <sys/iosupport.h>
 #include <nds/disc_io.h>
@@ -32,3 +32,4 @@ typedef struct {
 
 
 extern "C" bool _FAT_cache_flush (CACHE* cache);
+*/

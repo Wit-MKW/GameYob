@@ -1,53 +1,106 @@
-#---------------------------------------------------------------------------------
-.SUFFIXES:
-#---------------------------------------------------------------------------------
-ifeq ($(strip $(DEVKITARM)),)
-$(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM")
+# SPDX-License-Identifier: CC0-1.0
+#
+# SPDX-FileContributor: Antonio Niño Díaz, 2023
+
+BLOCKSDS	?= /opt/blocksds/core
+BLOCKSDSEXT	?= /opt/blocksds/external
+
+# User config
+# ===========
+
+NAME		:= gameyob
+
+GAME_TITLE	:= GameYob `git describe --always --abbrev=4`
+GAME_SUBTITLE	:= A Gameboy emulator for DS
+GAME_AUTHOR	:= Author: Drenn
+GAME_ICON	:= $(CURDIR)/icon.bmp
+
+# DLDI and internal SD slot of DSi
+# --------------------------------
+
+# Root folder of the SD image
+SDROOT		:= sdroot
+# Name of the generated image it "DSi-1.sd" for no$gba in DSi mode
+SDIMAGE		:= image.bin
+
+# Source code paths
+# -----------------
+
+# List of folders to combine into the root of NitroFS:
+NITROFSDIR	:=
+
+# Tools
+# -----
+
+MAKE		:= make
+RM		:= rm -rf
+
+# Verbose flag
+# ------------
+
+ifeq ($(VERBOSE),1)
+V		:=
+else
+V		:= @
 endif
 
-include $(DEVKITARM)/ds_rules
+# Directories
+# -----------
 
-export GAME_TITLE	:=	GameYob `git describe --always --abbrev=4`
-export GAME_SUBTITLE1	:=	A Gameboy emulator for DS
-export GAME_SUBTITLE2	:=	Author: Drenn
-export GAME_ICON	:=	$(CURDIR)/icon.bmp
-export TARGET		:=	gameyob
+ARM9DIR		:= arm9
+ARM7DIR		:= arm7
 
-# DSi stuff
-TID = 00030004
-GID = GYOB
+# Build artfacts
+# --------------
 
+ROM		:= $(NAME).nds
 
-.PHONY: arm7/$(TARGET).elf arm9/$(TARGET).elf
+# Targets
+# -------
 
-#---------------------------------------------------------------------------------
-# main targets
-#---------------------------------------------------------------------------------
-all: $(TARGET).nds $(TARGET).cia
+.PHONY: all clean arm9 arm7 dldipatch sdimage
 
-#---------------------------------------------------------------------------------
-$(TARGET).nds	:	arm7/$(TARGET).elf arm9/$(TARGET).elf
-	@ndstool -7 arm7/$(TARGET).elf -9 arm9/$(TARGET).elf -b $(GAME_ICON) "$(GAME_TITLE);$(GAME_SUBTITLE1);$(GAME_SUBTITLE2)" -h 0x200 -c $(TARGET).nds 
-	@echo built ... $(notdir $@)
+all: $(ROM)
 
-$(TARGET)_dsi.nds: arm7/$(TARGET).elf arm9/$(TARGET).elf
-	@ndstool -7 arm7/$(TARGET).elf -9 arm9/$(TARGET).elf -b $(GAME_ICON) "$(GAME_TITLE);$(GAME_SUBTITLE1);$(GAME_SUBTITLE2)" -g $(GID) -u $(TID) -c $@
-	@echo built ... $(notdir $@)
-
-$(TARGET).cia: $(TARGET)_dsi.nds
-	@make_cia --srl=$(TARGET)_dsi.nds
-	@mv $(TARGET)_dsi.cia $(TARGET).cia
-
-#---------------------------------------------------------------------------------
-arm7/$(TARGET).elf:
-	$(MAKE) -C arm7
-	
-#---------------------------------------------------------------------------------
-arm9/$(TARGET).elf:
-	$(MAKE) -C arm9
-
-#---------------------------------------------------------------------------------
 clean:
-	$(MAKE) -C arm9 clean
-	$(MAKE) -C arm7 clean
-	rm -f $(TARGET).nds $(TARGET).dsi $(TARGET).cia $(TARGET).arm7 $(TARGET).arm9
+	@echo "  CLEAN"
+	$(V)$(MAKE) -f Makefile.arm9 clean --no-print-directory
+	$(V)$(MAKE) -f Makefile.arm7 clean --no-print-directory
+	$(V)$(RM) $(ROM) build $(SDIMAGE)
+
+arm9:
+	$(V)+$(MAKE) -C arm9 --no-print-directory
+
+arm7:
+	$(V)+$(MAKE) -C arm7 --no-print-directory
+
+ifneq ($(strip $(NITROFSDIR)),)
+# Additional arguments for ndstool
+NDSTOOL_ARGS	:= -d $(NITROFSDIR)
+
+# Make the NDS ROM depend on the filesystem only if it is needed
+$(ROM): $(NITROFSDIR)
+endif
+
+# Combine the title strings
+ifeq ($(strip $(GAME_SUBTITLE)),)
+    GAME_FULL_TITLE := $(GAME_TITLE);$(GAME_AUTHOR)
+else
+    GAME_FULL_TITLE := $(GAME_TITLE);$(GAME_SUBTITLE);$(GAME_AUTHOR)
+endif
+
+$(ROM): arm9 arm7
+	@echo "  NDSTOOL $@"
+	$(V)$(BLOCKSDS)/tools/ndstool/ndstool -c $@ \
+		-7 arm7/build/$(NAME).elf -9 arm9/build/$(NAME).elf \
+		-b $(GAME_ICON) "$(GAME_FULL_TITLE)" \
+		$(NDSTOOL_ARGS)
+
+sdimage:
+	@echo "  MKFATIMG $(SDIMAGE) $(SDROOT)"
+	$(V)$(BLOCKSDS)/tools/mkfatimg/mkfatimg -t $(SDROOT) $(SDIMAGE)
+
+dldipatch: $(ROM)
+	@echo "  DLDIPATCH $(ROM)"
+	$(V)$(BLOCKSDS)/tools/dldipatch/dldipatch patch \
+		$(BLOCKSDS)/sys/dldi_r4/r4tf.dldi $(ROM)

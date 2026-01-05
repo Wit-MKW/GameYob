@@ -42,6 +42,7 @@ bool customBordersEnabled;
 bool sgbBordersEnabled;
 bool autoSavingEnabled;
 
+bool nifiEnabled;
 bool printerEnabled;
 
 volatile int consoleSelectedRow = -1;
@@ -120,17 +121,17 @@ void returnToLauncherFunc(int value) {
 
 void nifiEnableFunc(int value) {
     if (value) {
-		printMenuMessage("Warning: link emulation sucks.");
         setMenuOption("GB Printer", 0);
         enableNifi();
-	}
-    else
+	} else {
         disableNifi();
+    }
+    nifiEnabled = value;
 }
 
 void printerEnableFunc(int value) {
     if (value) {
-        setMenuOption("Wireless Link", 0);
+        setMenuOption("Mobile Adapter", 0);
         initGbPrinter();
     }
     printerEnabled = value;
@@ -382,7 +383,7 @@ ConsoleSubMenu menuList[] = {
             {"Manage Cheats", cheatFunc, 0, {}, 0},
             {"Rumble Pak", setRumbleFunc, 4, {"Off","Low","Mid","High"}, 2},
             {"Console Output", consoleOutputFunc, 4, {"Off","Time","FPS+Time","Debug"}, 0},
-            {"Wireless Link", nifiEnableFunc, 2, {"Off","On"}, 0},
+            {"Mobile Adapter", nifiEnableFunc, 2, {"Off","On"}, 0},
             {"GB Printer", printerEnableFunc, 2, {"Off","On"}, 1},
             {"Autosaving", setAutoSaveFunc, 2, {"Off","On"}, 1},
             {"Save Settings", saveSettingsFunc, 0, {}, 0}
@@ -488,33 +489,33 @@ void redrawMenu() {
     int nameStart = (32-strlen(menuList[menu].name)-2)/2;
     if (option == -1) {
         nameStart-=2;
-        iprintfColored(CONSOLE_COLOR_LIGHT_GREEN, "<");
+        printfColored(CONSOLE_COLOR_LIGHT_GREEN, "<");
     }
     else
-        iprintf("<");
+        printf("<");
     pos++;
     for (; pos<nameStart; pos++)
-        iprintf(" ");
+        printf(" ");
     if (option == -1) {
-        iprintfColored(CONSOLE_COLOR_LIGHT_YELLOW, "* ");
+        printfColored(CONSOLE_COLOR_LIGHT_YELLOW, "* ");
         pos += 2;
     }
     {
         int color = (option == -1 ? CONSOLE_COLOR_LIGHT_YELLOW : CONSOLE_COLOR_WHITE);
-        iprintfColored(color, "[%s]", menuList[menu].name);
+        printfColored(color, "[%s]", menuList[menu].name);
     }
     pos += 2 + strlen(menuList[menu].name);
     if (option == -1) {
-        iprintfColored(CONSOLE_COLOR_LIGHT_YELLOW, " *");
+        printfColored(CONSOLE_COLOR_LIGHT_YELLOW, " *");
         pos += 2;
     }
     for (; pos < 31; pos++)
-        iprintf(" ");
+        printf(" ");
     if (option == -1)
-        iprintfColored(CONSOLE_COLOR_LIGHT_GREEN, ">");
+        printfColored(CONSOLE_COLOR_LIGHT_GREEN, ">");
     else
-        iprintf(">");
-    iprintf("\n");
+        printf(">");
+    printf("\n");
 
     // Rest of the lines: options
     for (int i=0; i<menuList[menu].numOptions; i++) {
@@ -528,29 +529,29 @@ void redrawMenu() {
 
         if (menuList[menu].options[i].numValues == 0) {
             for (unsigned int j=0; j<(32-strlen(menuList[menu].options[i].name))/2-2; j++)
-                iprintf(" ");
+                printf(" ");
             if (i == option) {
-                iprintfColored(option_color, "* %s *\n\n", menuList[menu].options[i].name);
+                printfColored(option_color, "* %s *\n\n", menuList[menu].options[i].name);
             }
             else
-                iprintfColored(option_color, "  %s  \n\n", menuList[menu].options[i].name);
+                printfColored(option_color, "  %s  \n\n", menuList[menu].options[i].name);
         }
         else {
             for (unsigned int j=0; j<16-strlen(menuList[menu].options[i].name); j++)
-                iprintf(" ");
+                printf(" ");
             if (i == option) {
-                iprintfColored(option_color, "* ");
-                iprintfColored(option_color, "%s  ", menuList[menu].options[i].name);
-                iprintfColored(menuList[menu].options[i].enabled ? CONSOLE_COLOR_LIGHT_GREEN : option_color,
+                printfColored(option_color, "* ");
+                printfColored(option_color, "%s  ", menuList[menu].options[i].name);
+                printfColored(menuList[menu].options[i].enabled ? CONSOLE_COLOR_LIGHT_GREEN : option_color,
                         "%s", menuList[menu].options[i].values[menuList[menu].options[i].selection]);
-                iprintfColored(option_color, " *");
+                printfColored(option_color, " *");
             }
             else {
-                iprintf("  ");
-                iprintfColored(option_color, "%s  ", menuList[menu].options[i].name);
-                iprintfColored(option_color, "%s", menuList[menu].options[i].values[menuList[menu].options[i].selection]);
+                printf("  ");
+                printfColored(option_color, "%s  ", menuList[menu].options[i].name);
+                printfColored(option_color, "%s", menuList[menu].options[i].values[menuList[menu].options[i].selection]);
             }
-            iprintf("\n\n");
+            printf("\n\n");
         }
     }
 
@@ -558,11 +559,11 @@ void redrawMenu() {
     if (printMessage[0] != '\0') {
         int newlines = 23-(menuList[menu].numOptions*2+2)-1;
         for (int i=0; i<newlines; i++)
-            iprintf("\n");
+            printf("\n");
         int spaces = 31-strlen(printMessage);
         for (int i=0; i<spaces; i++)
-            iprintf(" ");
-        iprintf("%s\n", printMessage);
+            printf(" ");
+        printf("%s\n", printMessage);
 
         printMessage[0] = '\0';
     }
@@ -661,17 +662,17 @@ void printMenuMessage(const char* s) {
     strncpy(printMessage, s, 33);
 
     if (hadPreviousMessage) {
-        iprintf("\r");
+        printf("\r");
     }
     else {
         int newlines = 23-(menuList[menu].numOptions*2+2)-1;
         for (int i=0; i<newlines; i++)
-            iprintf("\n");
+            printf("\n");
     }
     int spaces = 31-strlen(printMessage);
     for (int i=0; i<spaces; i++)
-        iprintf(" ");
-    iprintf("%s", printMessage);
+        printf(" ");
+    printf("%s", printMessage);
 }
 
 void displaySubMenu(void (*updateFunc)()) {
@@ -754,7 +755,7 @@ void menuPrintConfig(FILE* file) {
     for (int i=0; i<numMenus; i++) {
         for (int j=0; j<menuList[i].numOptions; j++) {
             if (menuList[i].options[j].numValues != 0)
-                fiprintf(file, "%s=%d\n", menuList[i].options[j].name, menuList[i].options[j].selection);
+                fprintf(file, "%s=%d\n", menuList[i].options[j].name, menuList[i].options[j].selection);
         }
     }
 }
@@ -766,7 +767,7 @@ void printLog(const char *format, ...) {
     va_start(args, format);
 
     if (consoleDebugOutput)
-        viprintf(format, args);
+        vprintf(format, args);
 }
 
 
@@ -882,8 +883,8 @@ void updateScreens(bool waitToFinish) {
         doAtVBlank(setupScaledScreens1);
 
         if (waitToFinish) {
-            swiWaitForVBlank();
-            swiWaitForVBlank();
+            cothread_yield_irq(IRQ_VBLANK);
+            cothread_yield_irq(IRQ_VBLANK);
         }
     }
     else {
@@ -892,7 +893,7 @@ void updateScreens(bool waitToFinish) {
 
         doAtVBlank(setupUnscaledScreens);
         if (waitToFinish)
-            swiWaitForVBlank();
+            cothread_yield_irq(IRQ_VBLANK);
     }
 }
 
@@ -924,7 +925,7 @@ void consoleSetLineColor(int line, int color) {
     }
 }
 
-void iprintfColored(int palette, const char *format, ...) {
+void printfColored(int palette, const char *format, ...) {
     va_list args;
     va_start(args, format);
 
@@ -933,7 +934,7 @@ void iprintfColored(int palette, const char *format, ...) {
     int y = console->cursorY;
 
     char s[100];
-    vsiprintf(s, format, args);
+    vsprintf(s, format, args);
 
     u16* dest = BG_MAP_RAM_SUB(22)+y*32+x;
     for (uint i=0; i<strlen(s); i++) {
@@ -942,7 +943,7 @@ void iprintfColored(int palette, const char *format, ...) {
             y++;
         }
         else {
-            *(dest++) = s[i] | TILE_PALETTE(palette);
+            *(dest++) = (s[i]-32) | TILE_PALETTE(palette);
             x++;
             if (x == 32) {
                 x = 0;
@@ -952,7 +953,7 @@ void iprintfColored(int palette, const char *format, ...) {
     }
     console->cursorX = x;
     console->cursorY = y;
-    //iprintf(s);
+    //printf(s);
 }
 
 

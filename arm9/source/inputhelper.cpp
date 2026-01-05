@@ -79,9 +79,9 @@ void initInput()
 // But I found I could not rely on it in the gameboySyncAutosave() function.
 void flushFatCache() {
     // This involves things from libfat which aren't normally visible
-    devoptab_t* devops = (devoptab_t*)GetDeviceOpTab ("sd");
+    /*devoptab_t* devops = (devoptab_t*)GetDeviceOpTab ("sd");
     PARTITION* partition = (PARTITION*)devops->deviceData;
-    _FAT_cache_flush(partition->cache); // Flush the cache manually
+    _FAT_cache_flush(partition->cache); // Flush the cache manually*/
 }
 
 const char* gbKeyNames[] = {"-","A","B","Left","Right","Up","Down","Start","Select",
@@ -182,11 +182,11 @@ void controlsParseConfig(const char* line2) {
     }
 }
 void controlsPrintConfig(FILE* file) {
-    fiprintf(file, "config=%d\n", selectedKeyConfig);
+    fprintf(file, "config=%d\n", selectedKeyConfig);
     for (unsigned int i=0; i<keyConfigs.size(); i++) {
-        fiprintf(file, "(%s)\n", keyConfigs[i].name);
+        fprintf(file, "(%s)\n", keyConfigs[i].name);
         for (int j=0; j<NUM_DS_KEYS; j++) {
-            fiprintf(file, "%s=%s\n", dsKeyNames[j], gbKeyNames[keyConfigs[i].gbKeys[j]]);
+            fprintf(file, "%s=%s\n", dsKeyNames[j], gbKeyNames[keyConfigs[i].gbKeys[j]]);
         }
     }
 }
@@ -200,31 +200,31 @@ void redrawKeyConfigChooser() {
 
     consoleClear();
 
-    iprintf("Config: ");
+    printf("Config: ");
     if (option == -1)
-        iprintfColored(CONSOLE_COLOR_LIGHT_YELLOW, "* %s *\n\n", config->name);
+        printfColored(CONSOLE_COLOR_LIGHT_YELLOW, "* %s *\n\n", config->name);
     else
-        iprintf("  %s  \n\n", config->name);
+        printf("  %s  \n\n", config->name);
 
-    iprintf("    Button   Function\n\n");
+    printf("    Button   Function\n\n");
 
     for (int i=0; i<NUM_DS_KEYS; i++) {
         int len = 8-strlen(dsKeyNames[i]);
         while (len > 0) {
-            iprintf(" ");
+            printf(" ");
             len--;
         }
         if (option == i)
-            iprintfColored(CONSOLE_COLOR_LIGHT_YELLOW, "* %s | %s *\n", dsKeyNames[i], gbKeyNames[config->gbKeys[i]]);
+            printfColored(CONSOLE_COLOR_LIGHT_YELLOW, "* %s | %s *\n", dsKeyNames[i], gbKeyNames[config->gbKeys[i]]);
         else
-            iprintf("  %s | %s  \n", dsKeyNames[i], gbKeyNames[config->gbKeys[i]]);
+            printf("  %s | %s  \n", dsKeyNames[i], gbKeyNames[config->gbKeys[i]]);
     }
-    iprintf("\n\nPress X to make a new config.");
+    printf("\n\nPress X to make a new config.");
     if (selectedKeyConfig != 0) /* can't erase the default */ {
-        iprintf("\n\nPress Y to delete this config.");
+        printf("\n\nPress Y to delete this config.");
     }
     if (keyConfigChooser_printMenuWarning)
-        iprintf("\n\nNo key is assigned to the menu!");
+        printf("\n\nNo key is assigned to the menu!");
 }
 
 void updateKeyConfigChooser() {
@@ -249,7 +249,7 @@ void updateKeyConfigChooser() {
         keyConfigs.push_back(KeyConfig(*config));
         selectedKeyConfig = keyConfigs.size()-1;
         char name[32];
-        siprintf(name, "Custom %d", keyConfigs.size()-1);
+        sprintf(name, "Custom %d", keyConfigs.size()-1);
         strcpy(keyConfigs.back().name, name);
         option = -1;
         redraw = true;
@@ -350,17 +350,17 @@ void generalParseConfig(const char* line) {
 
 void generalPrintConfig(FILE* file) {
     if (romPath == 0)
-        fiprintf(file, "rompath=\n");
+        fprintf(file, "rompath=\n");
     else
-        fiprintf(file, "rompath=%s\n", romPath);
+        fprintf(file, "rompath=%s\n", romPath);
     if (biosPath == 0)
-        fiprintf(file, "biosfile=\n");
+        fprintf(file, "biosfile=\n");
     else
-        fiprintf(file, "biosfile=%s\n", biosPath);
+        fprintf(file, "biosfile=%s\n", biosPath);
     if (borderPath == 0)
-        fiprintf(file, "borderfile=\n");
+        fprintf(file, "borderfile=\n");
     else
-        fiprintf(file, "borderfile=%s\n", borderPath);
+        fprintf(file, "borderfile=%s\n", borderPath);
 }
 
 bool readConfigFile() {
@@ -408,16 +408,16 @@ end:
 
 void writeConfigFile() {
     FILE* file = fopen("/gameyobds.ini", "w");
-    fiprintf(file, "[general]\n");
+    fprintf(file, "[general]\n");
     generalPrintConfig(file);
-    fiprintf(file, "[console]\n");
+    fprintf(file, "[console]\n");
     menuPrintConfig(file);
-    fiprintf(file, "[controls]\n");
+    fprintf(file, "[controls]\n");
     controlsPrintConfig(file);
     fclose(file);
 
     char nameBuf[100];
-    siprintf(nameBuf, "%s.cht", basename);
+    sprintf(nameBuf, "%s.cht", basename);
     saveCheats(nameBuf);
 }
 
@@ -574,7 +574,7 @@ int loadRom(char* f)
 
         // Load cheats
         char nameBuf[100];
-        siprintf(nameBuf, "%s.cht", basename);
+        sprintf(nameBuf, "%s.cht", basename);
         loadCheats(nameBuf);
 
     } // !gbsMode
@@ -668,6 +668,9 @@ int loadSave()
             case 4:
                 numRamBanks = 16;
                 break;
+            case 5:
+                numRamBanks = 8;
+                break;
             default:
                 printLog("Invalid RAM bank number: %x\nDefaulting to 4 banks\n", ramSize);
                 numRamBanks = 4;
@@ -699,8 +702,6 @@ int loadSave()
     }
 
     if (!saveFile || fileSize < neededFileSize) {
-        fclose(saveFile);
-
         // Extend the size of the file, or create it
         if (!saveFile) {
             saveFile = fopen(savename, "wb");
@@ -708,6 +709,7 @@ int loadSave()
             fputc(0, saveFile);
         }
         else {
+            fclose(saveFile);
             saveFile = fopen(savename, "ab");
             for (; fileSize<neededFileSize; fileSize++)
                 fputc(0, saveFile);
@@ -734,6 +736,9 @@ int saveGame()
     if (numRamBanks == 0 || saveFile == NULL)
         return 0;
 
+    if (nifiEnabled)
+        saveNifi();
+
     printLog("Full game save\n");
 
     fseek(saveFile, 0, SEEK_SET);
@@ -758,6 +763,9 @@ int framesSinceAutosaveStarted=0;
 void gameboySyncAutosave() {
     if (!autosaveStarted)
         return;
+
+    if (nifiEnabled)
+        saveNifi();
 
     numSaveWrites = 0;
     wroteToSramThisFrame = false;
@@ -862,10 +870,10 @@ const char *mbcName[] = {"ROM","MBC1","MBC2","MBC3","MBC4","MBC5","MBC7","HUC3",
 
 void printRomInfo() {
     consoleClear();
-    iprintf("ROM Title: \"%s\"\n", romTitle);
-    iprintf("Cartridge type: %.2x (%s)\n", mapper, mbcName[MBC]);
-    iprintf("ROM Size: %.2x (%d banks)\n", romSize, numRomBanks);
-    iprintf("RAM Size: %.2x (%d banks)\n", ramSize, numRamBanks);
+    printf("ROM Title: \"%s\"\n", romTitle);
+    printf("Cartridge type: %.2x (%s)\n", mapper, mbcName[MBC]);
+    printf("ROM Size: %.2x (%d banks)\n", romSize, numRomBanks);
+    printf("RAM Size: %.2x (%d banks)\n", ramSize, numRamBanks);
 }
 
 const int STATE_VERSION = 5;
@@ -907,9 +915,9 @@ void saveState(int stateNum) {
     char statename[100];
 
     if (stateNum == -1)
-        siprintf(statename, "%s.yss", basename);
+        sprintf(statename, "%s.yss", basename);
     else
-        siprintf(statename, "%s.ys%d", basename, stateNum);
+        sprintf(statename, "%s.ys%d", basename, stateNum);
     outFile = fopen(statename, "w");
 
     if (outFile == 0) {
@@ -976,9 +984,9 @@ int loadState(int stateNum) {
     memset(&state, 0, sizeof(StateStruct));
 
     if (stateNum == -1)
-        siprintf(statename, "%s.yss", basename);
+        sprintf(statename, "%s.yss", basename);
     else
-        siprintf(statename, "%s.ys%d", basename, stateNum);
+        sprintf(statename, "%s.ys%d", basename, stateNum);
     inFile = fopen(statename, "r");
 
     if (inFile == 0) {
@@ -1068,7 +1076,6 @@ int loadState(int stateNum) {
     if (version < 3)
         ramEnabled = true;
 
-    transferReady = false;
     timerPeriod = periods[ioRam[0x07]&0x3];
     cyclesToEvent = 1;
 
@@ -1092,9 +1099,9 @@ void deleteState(int stateNum) {
     char statename[100];
 
     if (stateNum == -1)
-        siprintf(statename, "%s.yss", basename);
+        sprintf(statename, "%s.yss", basename);
     else
-        siprintf(statename, "%s.ys%d", basename, stateNum);
+        sprintf(statename, "%s.ys%d", basename, stateNum);
     unlink(statename);
 }
 
@@ -1102,9 +1109,9 @@ bool checkStateExists(int stateNum) {
     char statename[256];
 
     if (stateNum == -1)
-        siprintf(statename, "%s.yss", basename);
+        sprintf(statename, "%s.yss", basename);
     else
-        siprintf(statename, "%s.ys%d", basename, stateNum);
+        sprintf(statename, "%s.ys%d", basename, stateNum);
     return access(statename, R_OK) == 0;
     /*
     file = fopen(statename, "r");

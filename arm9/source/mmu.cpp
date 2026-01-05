@@ -290,7 +290,7 @@ void m3w(u16 addr, u8 val)
         case 0x5:
             /* The RTC register is selected by writing values 0x8-0xc, ram banks
              * are selected by values 0x0-0x3 */
-            if (val <= 0x3)
+            if (val <= 0x7)
                 refreshRamBank(val);
             else if (val >= 8 && val <= 0xc)
                 currentRamBank = val;
@@ -778,26 +778,6 @@ void writeMemory(u16 addr, u8 val)
         writeFunc(addr, val);
 }
 
-
-bool nifiTryAgain=true;
-void nifiTimeoutFunc() {
-    printLog("Nifi timeout\n");
-    if (nifiTryAgain) {
-        nifiSendid--;
-        sendPacketByte(55, ioRam[0x01]);
-        nifiSendid++;
-        nifiTryAgain = false;
-    }
-    else {
-        // There was no response from nifi, assume no connection.
-        printLog("No nifi response received\n");
-        ioRam[0x01] = 0xff;
-        requestInterrupt(SERIAL);
-        ioRam[0x02] &= ~0x80;
-        timerStop(2);
-    }
-}
-
 #ifdef DS
 void writeIO(u8 ioReg, u8 val) ITCM_CODE;
 #endif
@@ -815,36 +795,15 @@ void writeIO(u8 ioReg, u8 val)
             }
             return;
         case 0x02:
-            {
-                ioRam[ioReg] = val;
-                if (!nifiEnabled) {
-                    if (val & 0x80 && val & 0x01) {
-                        serialCounter = clockSpeed/1024;
-                        if (cyclesToExecute > serialCounter)
-                            cyclesToExecute = serialCounter;
-                    }
-                    else
-                        serialCounter = 0;
-                    return;
-                }
-                linkSendData = ioRam[0x01];
-                if (val & 0x80) {
-                    if (transferWaiting) {
-                        sendPacketByte(56, ioRam[0x01]);
-                        ioRam[0x01] = linkReceivedData;
-                        requestInterrupt(SERIAL);
-                        ioRam[ioReg] &= ~0x80;
-                        transferWaiting = false;
-                    }
-                    if (val & 1) {
-                        nifiTryAgain = true;
-                        timerStart(2, ClockDivider_64, 10000, nifiTimeoutFunc);
-                        sendPacketByte(55, ioRam[0x01]);
-                        nifiSendid++;
-                    }
-                }
-                return;
+            ioRam[ioReg] = val;
+            if (val & 0x80 && val & 0x01) {
+                serialCounter = clockSpeed/1024;
+                if (cyclesToExecute > serialCounter)
+                    cyclesToExecute = serialCounter;
             }
+            else
+                serialCounter = 0;
+            return;
         case 0x04:
             ioRam[ioReg] = 0;
             return;

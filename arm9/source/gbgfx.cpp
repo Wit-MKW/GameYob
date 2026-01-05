@@ -543,7 +543,7 @@ void initGFX()
     initGFXPalette();
 
     gbGraphicsDisabled = true;
-    swiWaitForVBlank();
+    cothread_yield_irq(IRQ_VBLANK);
 
     WIN_IN = (1<<4) | (1<<12) | 1;
     WIN_OUT = 1<<3;
@@ -1166,11 +1166,13 @@ void drawScreen()
 
     if (!(fastForwardMode || fastForwardKey)) {
         if (interruptWaitMode == 1) // Always wait for Vblank.
-            swiWaitForVBlank();
+            cothread_yield_irq(IRQ_VBLANK);
         else { // Continue if we've passed vblank.
             if (!didVblank)
-                swiWaitForVBlank();
+                cothread_yield_irq(IRQ_VBLANK);
         }
+    } else {
+        cothread_yield();
     }
     didVblank = false;
 
