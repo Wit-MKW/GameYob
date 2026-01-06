@@ -21,7 +21,7 @@ static struct nifiUser {
 	char config[MOBILE_CONFIG_SIZE];
 	unsigned time[MOBILE_MAX_TIMERS];
 	int sock[MOBILE_MAX_CONNECTIONS];
-	char sockOpen, sockUdp;
+	char sockOpen, sockUdp, sockConn;
 	char number[2][MOBILE_MAX_NUMBER_SIZE+1];
 } nifiState;
 
@@ -121,6 +121,7 @@ bool sock_open(struct nifiUser *user, unsigned conn, enum mobile_socktype type,
 	}
 	user->sock[conn] = sock;
 	user->sockOpen |= (1 << conn);
+	user->sockConn &= ~(1 << conn);
 	if (type == MOBILE_SOCKTYPE_UDP)
 		user->sockUdp |= (1 << conn);
 	else
@@ -134,6 +135,17 @@ void sock_close(struct nifiUser *user, unsigned conn) {
 
 int sock_connect(struct nifiUser *user, unsigned conn, const struct mobile_addr *addr) {
 	int rc;
+	if (user->sockConn & (1 << conn)) {
+		struct pollfd pfd = {
+			.fd = user->sock[conn],
+			.events = POLLOUT
+		};
+		rc = poll(&pfd, 1, 0);
+		if (rc == -1)
+			return -(errno != EAGAIN && errno != EINTR);
+		return rc && (pfd.revents == POLLOUT);
+	}
+	user->sockConn |= (1 << conn);
 	if (addr->type == MOBILE_ADDRTYPE_IPV6) {
 		struct mobile_addr6 *addr6 = (struct mobile_addr6*)addr;
 		struct sockaddr_in6 sockaddr = {
@@ -156,7 +168,7 @@ int sock_connect(struct nifiUser *user, unsigned conn, const struct mobile_addr 
 		memcpy(&sockaddr.sin_addr.s_addr, addr4->host, MOBILE_HOSTLEN_IPV4);
 		rc = connect(user->sock[conn], (struct sockaddr*)&sockaddr, sizeof(sockaddr));
 	}
-	return (rc == -1 && errno != EISCONN) ? -(errno != EALREADY && errno != EINPROGRESS) : 1;
+	return (rc == -1) ? -(errno != EINPROGRESS) : 1;
 }
 
 bool sock_listen(struct nifiUser *user, unsigned conn) {
@@ -271,6 +283,8 @@ void saveNifi() {
 }
 
 void enableNifi() {
+	if (nifiInit)
+		return;
 	nifiState.serial = false;
 	nifiState.wifi = false;
 	nifiState.sockOpen = 0;
